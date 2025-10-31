@@ -15,7 +15,7 @@ on just copying the template.
 - create a structure module that maps 2d to 3d
 
 To-do:
-- get data from CT
+- (DONE) get data from CT
 - (DONE) create pair/single representation
 
 Notes:
@@ -33,6 +33,13 @@ Notes:
     - potential inverted
         - 5' -- X -- SPACER -- X' -- 3'
         - min lengths: 4, 5, 6
+
+- files:
+    - bprna, archiveII, rnastralign
+        - CT - sequence and pairings (no pseudoknots)
+    - bprna
+        - ST - sequence, pairings, structural elements (with pseudoknots)
+        - DBN
 
 - Thoughts on how to think (and talk) about RNA structure:
 https://www.pnas.org/doi/10.1073/pnas.2112677119
@@ -53,3 +60,10 @@ https://www.pnas.org/doi/10.1073/pnas.2112677119
         - While it is true that isolated non-Watson–Crick pairs are destabilizing within A-form helices, it is equally true that non-Watson–Crick pairs form favorable, specific, and necessary interactions in specific structural contexts
     - perhaps the issue is in Depicting RNA
 
+- Task logger:
+    10/30
+        - finished creating single/pair representation
+    10/31
+        - finished CT file parsing (to extract sequenece, pairings)
+        - created script to move CT files
+        - put together sequences from RNAStrAlign and ArchiveII as parquet

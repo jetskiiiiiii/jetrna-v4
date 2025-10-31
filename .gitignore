@@ -1,2 +1,4 @@
 .venv/
 .DS_Store
+dataset/
+pre-process-data/__pycache__/
