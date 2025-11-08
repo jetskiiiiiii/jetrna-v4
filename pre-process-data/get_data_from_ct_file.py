@@ -14,6 +14,8 @@ def get_data_from_ct_file(filepath):
         - sequence (str): Nucleotide base sequence
         - pairings (str): Pairings in DBN form
 
+    Note: Natural numbering of 6th column ignored to avoid unncessary confusion.
+    See example where natural numbering is not equal to index: 23s_B.subtilis_domain3.ct
     """
     with open(filepath, "r") as file:
         length = 0
@@ -48,18 +50,19 @@ def get_data_from_ct_file(filepath):
             is_index_2_index_minus_1 = True if parts_processed[2] == parts_processed[0] - 1 else False
             is_index_3_index_plus_1 = True if parts_processed[3] == parts_processed[0] + 1 else False
             is_index_4_within_pairing_range = True if parts_processed[4] > -1 and parts_processed[4] < length + 1 else False # Not strict check against pairing rules
-            is_index_5_natural_numbering = True if parts_processed[5] == parts_processed[0] else False
+            #is_index_5_natural_numbering = True if parts_processed[5] == parts_processed[0] else False
+
+            #print(is_index_1_base, is_index_2_index_minus_1, is_index_3_index_plus_1, is_index_4_within_pairing_range, is_index_5_natural_numbering)
 
             if (is_index_1_base
                     and is_index_2_index_minus_1
                     and is_index_3_index_plus_1
-                    and is_index_4_within_pairing_range
-                    and is_index_5_natural_numbering):
+                    and is_index_4_within_pairing_range):
                 sequence += parts_processed[1]
                 pairing.append(parts_processed[4]) 
 
         return sequence, pairing
 
 if __name__ == "__main__":
-    sequence, pairing = get_data_from_ct_file("./dataset/bpRNA_CRW_1897.ct")
+    sequence, pairing = get_data_from_ct_file("./dataset/ct/archiveII/23s_B.subtilis_domain3.ct")
     print(sequence, pairing)

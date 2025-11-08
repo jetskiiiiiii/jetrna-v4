@@ -2,7 +2,11 @@ import numpy as np
 
 def get_pair_representation_from_sequence(sequence: str) -> np.ndarray:
     """Convert nucleotide sequence into pair representation.
-    Currently 8 channels (features): invalid, unpaired, and 6 pairings.
+    Features/channels:
+        - same entity/base (1 channel)
+        - invalid (1 channel)
+        - unpaired (1 channel)
+        - potential pairings (6 channels)
 
     Args:
         - sequence (str): Nucleotide sequence.

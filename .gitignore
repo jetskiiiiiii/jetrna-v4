@@ -2,3 +2,4 @@
 .DS_Store
 dataset/
 pre-process-data/__pycache__/
+lightning_logs/
