@@ -5,7 +5,7 @@ from DataModule import jetRNA_v4_DataModule
 
 IN_DIM = 27 
 HIDDEN_DIM = 32
-OUT_DIM = 27
+OUT_DIM = 3
 LEARNING_RATE = 1.8e-3
 BATCH_SIZE = 8 # Batches 2 variable-sized graphs together
 

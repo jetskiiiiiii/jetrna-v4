@@ -37,12 +37,18 @@ def get_prediction_tensor(path_to_model: str, path_to_save: str):
     trainer = L.Trainer()
     predictions = trainer.predict(model, data_module) # Returns list containing one Tensor of torch.Size([13, 1, 640, 640])
 
-    torch.save(predictions, path_to_save)
+    all_preds = torch.cat([r[0] for r in predictions], dim=0)
+    all_centers = torch.cat([r[2] for r in predictions], dim=0)
+
+    # Denormalize and recenter
+    final_coords = (all_preds * 900.0) + all_centers.unsqueeze(1)
+
+    torch.save(final_coords, path_to_save)
 
     return predictions
 
 if __name__ == "__main__":
-    version = "v1"
+    version = "v3"
     idx = 1 
     model_path = f"./lightning_logs/{version}/checkpoints/{version}.ckpt"
 
@@ -51,6 +57,8 @@ if __name__ == "__main__":
     predictions = get_prediction_tensor(model_path, path_to_save_prediction_tensor)
 
     predictions = torch.load(path_to_save_prediction_tensor)
-    #print(predictions[0][0])
-    x = predictions[0][idx].numpy()
-    np.savetxt(path_to_save_single_prediction_tensor, x)     
+    #print(predictions[0][0][0])
+    print(predictions.numpy().shape)
+    x = predictions[idx, :, :].numpy()
+    print(x.shape)
+    np.savetxt(path_to_save_single_prediction_tensor, x, fmt="%.2f")
