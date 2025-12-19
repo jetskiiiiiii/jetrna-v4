@@ -3,7 +3,7 @@ import lightning as L
 from torch_geometric.loader import DataLoader
 from torch_geometric.data import Data
 
-class jetRNADataModule(L.LightningDataModule):
+class sampleGraphDataModule(L.LightningDataModule):
     def __init__(self):
         super().__init__()
 

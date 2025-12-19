@@ -234,3 +234,4 @@ if __name__ == "__main__":
     #print(x.shape)
     #print(x[:, 26])
     #print(get_potential_inversions_from_sequence("CGAUACGCUAUGCGCUAU"))
+    np.savetxt("example_single_embdding.csv", x, delimiter=",")

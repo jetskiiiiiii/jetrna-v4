@@ -3,3 +3,5 @@
 dataset/
 pre-process-data/__pycache__/
 lightning_logs/
+predictions/
+main/__pycache__/

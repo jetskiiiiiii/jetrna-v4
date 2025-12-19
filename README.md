@@ -20,6 +20,16 @@ on just copying the template.
     - diffusion model (alphafold 3)
 
 # Notes:
+- model flow
+    - single represenation (n x 27)
+    - cnn encoder (feature extraction)
+        - cnn
+        - batch norm
+        - cnn
+        - batch norm
+    - gcn decoder (coordinate predictor)
+        - graph represents xyz coords, with a node for each base and feature of each node from cnn
+
 - Order of bases: C, G, A, U
 
 - Single represenation
@@ -79,16 +89,27 @@ https://www.pnas.org/doi/10.1073/pnas.2112677119
         interactions in specific structural contexts
     - perhaps the issue is in Depicting RNA
 
+- AlphaFold 3
+     - input embedder (3 blocks)
+        - Atom Attention Encoder
+        - Atom Transformer
+        - Diffusion Transformer
+
 - model ideas:
     - use sequence/pairing data to predict pairing matrix (use > 0.9 accuracy to add to embedding), transfer learn with sequence/position data to get final 3d shape
     - MSA is not that Important (according to AlphaFold 3)
     - architecture:
+        - before feeding data to gnn, rich embeddings must be created (different than features created for single/pair reps)
+        must create embeddings from local attention so that final output can be 2d
         Main:
             - from sequence, create single embedding
             - apply linear
             - unsqueeze and add single embeddings to create intitial pair embedding
             - add features to initial pair embedding
             - apply linear to pair embedding template and add to pair embedding
+
+- current model progress:
+    - normalizing target values by simply dividing by max val
 
 
 # Task logger:
@@ -103,3 +124,9 @@ https://www.pnas.org/doi/10.1073/pnas.2112677119
 - (DONE) get data from CT
 - (DONE) create pair/single representation
 - input vdW into pair embedding
+
+# References
+- " AlphaFold Decoded: Feature Embedding (Lesson 6) "
+    - https://www.youtube.com/watch?v=NgxSELK9BAk
+- " AlphaFold 3 deep dive "
+    - https://www.youtube.com/watch?v=Or3iq4_9-wA
