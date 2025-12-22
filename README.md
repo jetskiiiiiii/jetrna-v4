@@ -111,6 +111,10 @@ https://www.pnas.org/doi/10.1073/pnas.2112677119
 - current model progress:
     - normalizing target values by simply dividing by max val
 
+- models:
+    - v0: cnn simple (feature extraction only)
+    - v4: mlp regression head
+    - v5: 4 cnn blocks, 4 gcn layers
 
 # Task logger:
     10/30

@@ -8,6 +8,8 @@ HIDDEN_DIM = 32
 OUT_DIM = 3
 LEARNING_RATE = 5e-5
 BATCH_SIZE = 8 # Batches 2 variable-sized graphs together
+DROPOUT = 0.1
+NUM_CNN_BLOCKS = 4
 
 EPOCHS = 20
 
@@ -41,7 +43,7 @@ if __name__ == "__main__":
         BATCH_SIZE,
     )
 
-    model = jetRNA_v4_Model(IN_DIM, HIDDEN_DIM, OUT_DIM, LEARNING_RATE)
+    model = jetRNA_v4_Model(IN_DIM, HIDDEN_DIM, OUT_DIM, LEARNING_RATE, DROPOUT, NUM_CNN_BLOCKS)
 
     trainer = L.Trainer(
         max_epochs=EPOCHS,
