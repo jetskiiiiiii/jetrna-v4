@@ -1,5 +1,7 @@
 import itertools
+import traceback
 import numpy as np
+import pandas as pd
 from typing import List, Tuple
 
 def get_single_representation_from_sequence(sequence: str) -> np.ndarray:
@@ -22,7 +24,7 @@ def get_single_representation_from_sequence(sequence: str) -> np.ndarray:
 
     """
     length = len(sequence)
-    num_channels = 27
+    num_channels = 28
     single_representation = np.zeros((length, num_channels))
 
     window_11_gc = []
@@ -30,98 +32,55 @@ def get_single_representation_from_sequence(sequence: str) -> np.ndarray:
     window_11_au = []
     window_21_au = []
 
+    group_4, group_5, group_6 = get_potential_inversions_from_sequence(sequence)
+    set_4, set_5, set_6 = set(group_4), set(group_5), set(group_6)
+
     for i in range(length):
+        base = sequence[i]
+
         # Get one-hot sequence
-        if sequence[i] == "C":
+        if base == "C":
             single_representation[i][0] = 1
-        elif sequence[i] == "G":
+        elif base == "G":
             single_representation[i][1] = 1
-        elif sequence[i] == "A":
+        elif base == "A":
             single_representation[i][2] = 1
-        elif sequence[i] == "U":
+        elif base == "U":
             single_representation[i][3] = 1
+        else:
+            single_representation[i][4] = 1     # To handle "-" and "N"
 
         # Get di-nucleotide
-        if i == length - 1:     # Prevent indexing from going out of range
-            pass
-        elif sequence[i] == "C" and sequence[i+1] == "C":
-            single_representation[i][4] = 1
-        elif sequence[i] == "C" and sequence[i+1] == "G":
-            single_representation[i][5] = 1
-        elif sequence[i] == "C" and sequence[i+1] == "A":
-            single_representation[i][6] = 1
-        elif sequence[i] == "C" and sequence[i+1] == "U":
-            single_representation[i][7] = 1
-        elif sequence[i] == "G" and sequence[i+1] == "C":
-            single_representation[i][8] = 1
-        elif sequence[i] == "G" and sequence[i+1] == "G":
-            single_representation[i][9] = 1
-        elif sequence[i] == "G" and sequence[i+1] == "A":
-            single_representation[i][10] = 1
-        elif sequence[i] == "G" and sequence[i+1] == "U":
-            single_representation[i][11] = 1
-        elif sequence[i] == "A" and sequence[i+1] == "C":
-            single_representation[i][12] = 1
-        elif sequence[i] == "A" and sequence[i+1] == "G":
-            single_representation[i][13] = 1
-        elif sequence[i] == "A" and sequence[i+1] == "A":
-            single_representation[i][14] = 1
-        elif sequence[i] == "A" and sequence[i+1] == "U":
-            single_representation[i][15] = 1
-        elif sequence[i] == "U" and sequence[i+1] == "C":
-            single_representation[i][16] = 1
-        elif sequence[i] == "U" and sequence[i+1] == "G":
-            single_representation[i][17] = 1
-        elif sequence[i] == "U" and sequence[i+1] == "A":
-            single_representation[i][18] = 1
-        elif sequence[i] == "U" and sequence[i+1] == "U":
-            single_representation[i][19] = 1
+        if i < length - 1:     # Prevent indexing from going out of range
+            next_base = sequence[i+1]
+            bases = "GCAU"
+            if base in bases and next_base in bases:
+                idx_map = {"C": 0, "G": 1, "A": 2, "U": 3}
+                di_idx = 5 + (idx_map[base] * 4) + idx_map[next_base]
+                single_representation[i][di_idx] = 1
 
         # Get local g/c, a/u content
         ## We want context windows of size 11 and 21,
-        ## so we only need to iterate through 21 as the 11-window
-        ## will always be inside of the 21 window.
-        for j in range(21):
-            window_idx = i-10+j
-            if window_idx > 0:  # Indexing with negative number will grab from end of sequence
-                try:            # Try block to capture indexing error when idx > length
-                    if sequence[window_idx] in ["G", "C"]:      # If base is G/C
-                        window_21_gc[i].append(sequence[window_idx])
-                        if j > 4 and j < 16:    # If idx is inside of 11 window
-                            window_11_gc[i].append(sequence[window_idx])
-                    elif sequence[window_idx] in ["A", "U"]:    # If base is A/U
-                        window_21_au[i].append(sequence[window_idx])
-                        if j > 4 and j < 16:
-                            window_11_gc[i].append(sequence[window_idx])
-                except IndexError:
-                    pass
+        
+        # Sliding window
+        for i in range(length):
+            # Window boundaries
+            w11_start, w11_end = max(0, i-5), min(length, i+6)
+            w21_start, w21_end = max(0, i-10), min(length, i+11)
 
-        # To fit local contet into one channel, we get the average content in window
-        single_representation[i][20] = len(window_11_gc)/length
-        single_representation[i][21] = len(window_21_gc)/length
-        single_representation[i][22] = len(window_11_au)/length
-        single_representation[i][23] = len(window_21_au)/length
+            seq_11 = sequence[w11_start:w11_end]
+            seq_21 = sequence[w21_start:w21_end]
+
+            # Calculating percentages
+            single_representation[i, 21] = sum(1 for b in seq_11 if b in "GC") / len(seq_11)
+            single_representation[i, 22] = sum(1 for b in seq_21 if b in "GC") / len(seq_21)
+            single_representation[i, 23] = sum(1 for b in seq_11 if b in "AU") / len(seq_11)
+            single_representation[i, 24] = sum(1 for b in seq_21 if b in "AU") / len(seq_21)
 
         # Get potential inversions
-        group_4, group_5, group_6 = get_potential_inversions_from_sequence(sequence)
-        if i in group_4:
-            single_representation[i][24] = 1
-            group_4.remove(i)
-        else:
-            single_representation[i][24] = 0
-
-        if i in group_5:
-            single_representation[i][25] = 1
-            group_5.remove(i)
-        else:
-            single_representation[i][25] = 0
-
-        if i in group_6:
-            single_representation[i][26] = 1
-            group_6.remove(i)
-        else:
-            single_representation[i][26] = 0
-
+        if i in set_4: single_representation[i][25] = 1 
+        if i in set_5: single_representation[i][26] = 1 
+        if i in set_6: single_representation[i][27] = 1
 
     return single_representation
 
@@ -156,13 +115,16 @@ def get_potential_inversions_from_sequence(sequence: str) -> Tuple[List[int], Li
     inversions = {"C": ["G"],
                     "G": ["C", "U"],
                     "A": ["U"],
-                    "U": ["A", "G"]}
+                    "U": ["A", "G"],
+                    "-": [],
+                    "N": [],
+                    "X": []}
     for i in range(length-3): # Stop at 4th from end as that is the last possible grouping
         # Creating 4 base grouping
         # Every time grouping is created,
         # create the inversion, too.
         group = sequence[i:i+4]
-        inverted_group = [inversions[base] for base in group]
+        inverted_group = [inversions.get(base, []) for base in group]
 
         # If group exists, combinations have been included - only need the first instace of inversions
         if group not in group_4:
@@ -231,7 +193,30 @@ def get_potential_inversions_from_sequence(sequence: str) -> Tuple[List[int], Li
 
 if __name__ == "__main__":
     x = get_single_representation_from_sequence("CGAUACGCUAUGCGCUAU")
-    #print(x.shape)
+    print(x.shape)
     #print(x[:, 26])
     #print(get_potential_inversions_from_sequence("CGAUACGCUAUGCGCUAU"))
-    np.savetxt("example_single_embdding.csv", x, delimiter=",")
+    np.savetxt("example_single_embdding.csv", x, delimiter=",", fmt="%.2f")
+    
+    #test_sequences_path = "./dataset/stanford/test_sequences.csv"
+    #val_sequences_path = "./dataset/stanford/validation_sequences.csv"
+    #train_sequences_path = "./dataset/stanford/train_sequences.csv"
+
+    #test_df = pd.read_csv(test_sequences_path)
+    #val_df = pd.read_csv(val_sequences_path)
+    #train_df = pd.read_csv(train_sequences_path)
+
+    #for idx, row in val_df.iterrows():
+    #    target_id = row["target_id"]
+    #    sequence = row["sequence"]
+
+    #    try:
+    #        representation = get_single_representation_from_sequence(sequence)
+
+    #        np.save(f"./dataset/stanford/single_representation/val/{target_id}.npy", representation)
+    #    except Exception as e:
+    #        print(f"Error processing {target_id}")
+    #        print(f"Error Type: {type(e).__name__}")
+    #        print(f"Error Message: {e}")
+    #        traceback.print_exc()
+    #

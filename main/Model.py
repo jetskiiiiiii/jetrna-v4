@@ -1,35 +1,10 @@
-from numpy import transpose
 import torch
 import lightning as L
 import torch.nn as nn
+from torch.nn import Conv1d, Conv2d, LayerNorm, Linear
 import torch.nn.functional as F
-from torch_geometric.data import Data
 from torch_geometric.nn import GCNConv
 
-class BaseAttentionEncoder(nn.Module):
-    def __init__(self, in_channels, out_channels):
-        super().__init__()
-        self.W_q = nn.Linear(in_channels, out_channels)
-        self.W_k = nn.Linear(in_channels, out_channels)
-        self.W_v = nn.Linear(in_channels, out_channels)
-
-        self.scaling_factor = out_channels**0.5
-
-    def forward(self, in_channels):
-        Q = self.W_q(in_channels)
-        K = self.W_k(in_channels)
-        V = self.W_v(in_channels)
-
-        E = torch.matmul(Q, K.transpose(-2, -1))
-        E = E/self.scaling_factor
-
-        A = F.softmax(E, dim=1)
-
-        C = torch.matmul(A, V)
-
-        S_p = torch.cat([Q, C], dim=1)
-
-        return S_p, A
 
 class CNNEncoder(nn.Module):
     """Implementing 1D encoder to extract features from single representation.
@@ -40,14 +15,14 @@ class CNNEncoder(nn.Module):
     def __init__(self, in_channels, hidden_channels, out_channels):
         super().__init__()
         # Projecting single representation into higher dimension
-        self.fc1 = nn.Linear(in_channels, hidden_channels)
+        self.fc1 = Linear(in_channels, hidden_channels)
 
         # Feature extraction
-        self.conv1 = nn.Conv1d(hidden_channels, hidden_channels, kernel_size=3, padding=1)
-        self.conv2 = nn.Conv1d(hidden_channels, hidden_channels, kernel_size=3, padding=1)
+        self.conv1 = Conv1d(hidden_channels, hidden_channels, kernel_size=3, padding=1)
+        self.conv2 = Conv1d(hidden_channels, hidden_channels, kernel_size=3, padding=1)
 
         # Decoding layer
-        self.conv3 = nn.Conv1d(hidden_channels, in_channels, kernel_size=3, padding=1)
+        self.conv3 = Conv1d(hidden_channels, in_channels, kernel_size=3, padding=1)
 
     def forward(self, x):
         x = self.fc1(x)
@@ -67,19 +42,37 @@ class CNNEncoder(nn.Module):
         return latent, reconstruction 
 
 
-class GNNCoordinatePredictor(nn.Module):
+class GCNCoordinatePredictor(nn.Module):
     """GCN based decoder to predict final coordinates of sequence.
 
     """
     def __init__(self, in_channels, hidden_channels, out_channels):
         super().__init__()
-        self.conv1 = GCNConv(in_channels, hidden_channels)
-        self.conv2 = GCNConv(hidden_channels, out_channels)
+        self.conv1 = GCNConv(in_channels, hidden_channels, add_self_loops=True, normalize=True)
+        self.bn1 = LayerNorm(hidden_channels)
+        self.conv2 = GCNConv(hidden_channels, hidden_channels, add_self_loops=True, normalize=True)
+        self.bn2 = LayerNorm(hidden_channels)
+        self.fcn = Conv1d(hidden_channels, hidden_channels, kernel_size=5, padding=2)
+        self.regress_head = torch.nn.Linear(hidden_channels, out_channels)
 
-    def forward(self, x, edge_index):
-        x = F.leaky_relu(self.conv1(x, edge_index))
+    def forward(self, x, edge_index, batch_size, seq_len):
+        x = self.conv1(x, edge_index)
+        x = self.bn1(x)
+        x = F.leaky_relu(x)
         x = self.conv2(x, edge_index)
-        return x
+        x = self.bn2(x)
+        x = F.leaky_relu(x)
+
+        x = x.view(batch_size, seq_len, -1).transpose(1, 2)         # Reshape for CNN
+        x = self.fcn(x)
+        x = F.leaky_relu(x)
+        x = x.transpose(1, 2)
+
+        mask = (x!=-1.0).any(dim=-1)                        # Ensuring padding doesn't disrupt predictions
+        x = x * mask.unsqueeze(-1).float()
+        coords = self.regress_head(x)
+
+        return coords
 
 
 class jetRNA_v4_Model(L.LightningModule):
@@ -87,7 +80,7 @@ class jetRNA_v4_Model(L.LightningModule):
         super().__init__()
         self.save_hyperparameters()
         self.cnn_encoder = CNNEncoder(in_channels, hidden_channels, hidden_channels)
-        self.gnn_predictor = GNNCoordinatePredictor(hidden_channels, hidden_channels, out_channels)
+        self.gcn_predictor = GCNCoordinatePredictor(hidden_channels, hidden_channels, out_channels)
         self.lr = learning_rate
 
     def forward(self, x, edges):
@@ -97,18 +90,10 @@ class jetRNA_v4_Model(L.LightningModule):
         features, reconstruction = self.cnn_encoder(x)
 
         # Flatten for GCN
-        x_flat = features.reshape(-1, features.size(-1))
-
-        # Creating combined edge_index for batch
-        combined_edges = []
-        for i, edge in enumerate(edges):
-            combined_edges.append(edge + (i * seq_len))
-        batched_edge_index = torch.cat(combined_edges, dim=1)
+        x_flat = features.reshape(batch_size * seq_len, -1)
 
         # Predicting coordinates with GCN
-        pred_coords_flat = self.gnn_predictor(x_flat, batched_edge_index)
-
-        pred_coords = pred_coords_flat.view(batch_size, seq_len, 3)
+        pred_coords = self.gcn_predictor(x_flat, edges, batch_size, seq_len)
 
         return pred_coords, reconstruction
 
@@ -121,10 +106,13 @@ class jetRNA_v4_Model(L.LightningModule):
         return loss
 
     def shared_step(self, batch, step):
-        x, edges, y, y_center = batch
+        x, edges, y, y_center, valid_coords_mask = batch
+        print(x.max(), y.max())
+
         pred_coords, reconstructed = self(x, edges)         # Features are, for now, the predicted coords
 
-        mask = (x!=-1.0).any(dim=-1)                        # Ignoring padding
+        padding_mask = (x!=-1.0).any(dim=-1)                        # Ignoring padding
+        mask = padding_mask & valid_coords_mask
 
         loss_rec = F.mse_loss(reconstructed[mask], x[mask])
         loss_coord = F.mse_loss(pred_coords[mask], y[mask])
@@ -140,19 +128,41 @@ class jetRNA_v4_Model(L.LightningModule):
 
             if len(real_coords) > 1:
                 diffs = real_coords[1:] - real_coords[:-1]
-                dists = torch.norm(diffs, dim=-1)
+                sum_sq = torch.sum(diffs*2, dim=-1)
+                dists = torch.sqrt(sum_sq.clamp(min=1e-7))
 
                 bond_loss += F.mse_loss(dists, torch.full_like(dists, ideal_dist))
 
-        total_loss = loss_coord + (0.5 * bond_loss) + (0.1 * loss_rec)
+        avg_bond_loss = bond_loss / pred_coords.shape[0]
+        total_loss = loss_coord + (0.5 * avg_bond_loss) + (0.1 * loss_rec)
 
-        self.log(f"{step}_loss_coord", loss_coord)
+        self.log(f"{step}_loss_rec", loss_rec, batch_size=8)
+        self.log(f"{step}_loss_coord", loss_coord, batch_size=8)
+        self.log(f"{step}_loss_total", total_loss, batch_size=8)
         return total_loss
 
+    def on_train_start(self):
+        #torch.autograd.set_detect_anomaly(True)
+        #print("--- Anomaly Detection Enabled ---")
+        pass
+
+    def on_train_batch_end(self, outputs, batch, batch_idx):
+        if torch.isnan(outputs["loss"]):
+            print(f"NaN loss detected at batch {batch_idx}")
+
     def predict_step(self, batch, batch_idx):
-        x, edges, y, y_center = batch
+        x, edges, y, y_center, mask, id_list = batch
         pred_coords, reconstructed = self(x, edges)         # Features are, for now, the predicted coords
-        return pred_coords, reconstructed, y_center         # Returns coords - (); reconstructed - (batch, N, hidden_channels)
+
+        pred_coords = (pred_coords * 900.0) + y_center.unsqueeze(1)     # Denormalize and recenter
+
+        results = {} 
+        for i in range(pred_coords.shape[0]):
+            valid_indices = mask[i]
+            actual_coords = pred_coords[i][valid_indices]
+            results[id_list[i]] = actual_coords.cpu()
+             
+        return results
 
     def configure_optimizers(self) -> torch.optim.Optimizer:
         optimizer = torch.optim.Adam(self.parameters(), lr=self.lr)

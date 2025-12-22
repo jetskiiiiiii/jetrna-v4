@@ -5,3 +5,4 @@ pre-process-data/__pycache__/
 lightning_logs/
 predictions/
 main/__pycache__/
+example_single_embdding.csv
